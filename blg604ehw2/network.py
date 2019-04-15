@@ -76,12 +76,13 @@ class DuellingHead(torch.nn.Module):
     def __init__(self, nact, n_in):
         super().__init__()
         ### YOUR CODE HERE ###
-        raise NotImplementedError
+        self.head = torch.nn.Linear(n_in, nact)
+        self._init_weights()
         ###       END      ###
 
     def forward(self, x):
         ### YOUR CODE HERE ###
-        raise NotImplementedError
+        return self.head(x)
         ###       END      ###
 
     # Optional

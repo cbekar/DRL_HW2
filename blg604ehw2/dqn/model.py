@@ -37,7 +37,7 @@ class BaseDqn:
         super().__init__()
         self.nact = nact
         self.buffer_capacity = buffer_capacity
-        self._device = "cpu"
+        self._device = "cuda"
         random.seed()
 
     def greedy_policy(self, state):
@@ -186,7 +186,7 @@ class DQN(BaseDqn, torch.nn.Module):
 
 
 class DuelingDoublePrioritizedDQN(BaseDqn, torch.nn.Module):
-    """ DQN implementaiton with Duelling architecture,
+    """ DQN implementation with Duelling architecture,
     Prioritized Replay Buffer and Double Q learning. Double
     Q learning idea is implemented with a target network that
     is replaced with the main network at every Nth step.
@@ -207,38 +207,44 @@ class DuelingDoublePrioritizedDQN(BaseDqn, torch.nn.Module):
     """
 
     def __init__(self, valuenet, nact, lr=0.001, buffer_capacity=10000,
-                 target_replace_period=50):
+                 target_replace_period=50, gamma=0.98):
         super().__init__(nact, buffer_capacity)
         ### YOUR CODE HERE ###
-        raise NotImplementedError
+        self.valuenet = valuenet
+        self.target_net = deepcopy(valuenet)
+        self.target_update_period = target_replace_period
+        self.target_update_counter = 0
+        self.buffer = PriorityBuffer(capacity=buffer_capacity)
+        self.opt = torch.optim.Adam(self.valuenet.parameters(), lr=lr)
+        self.gamma = gamma
         ###       END      ###
 
     def _greedy_policy(self, state):
         """ Return greedy action for the state """
         ### YOUR CODE HERE ###
-        raise NotImplementedError
+        super()._greedy_policy(state)
         ###       END      ###
 
-    def td_error(self, trans, gamma):
+    def td_error(self, trans):
         """ Return the td error, predicited values and
         target values.
         """
         # Optional but convenient
         ### YOUR CODE HERE ###
-        raise NotImplementedError
+        state = torch.from_numpy(trans.state).to(self.device)
+        next_state = torch.from_numpy(trans.next_state).to(self.device)
+        return trans.reward + self.gamma*self.valuenet.forward(next_state)[trans.action] - self.valuenet.forward(state)[trans.action] #TODO: next_action??
         ###       END      ###
 
-    def push_transition(self, transition, gamma):
+    def push_transition(self, transition):
         """ Push transitoins and corresponding td error
         into the prioritized replay buffer.
         """
         ### YOUR CODE HERE ###
-
         # Remember Prioritized Replay Buffer requires
         # td error to push a transition. You need
         # to calculate it for the given trainsition
-
-        raise NotImplementedError
+        self.buffer.push(transition, self.td_error(transition))
         ###       END      ###
 
     def update(self, batch_size, gamma):
@@ -246,15 +252,38 @@ class DuelingDoublePrioritizedDQN(BaseDqn, torch.nn.Module):
         targetnet(if period). After the td error is
         calculated for all the batch, priority values
         of the transitions sampled from the buffer
-        are updated as well. Return mean absulute td error. 
+        are updated as well. Return mean absolute td error. 
         """
         assert batch_size < self.buffer.size, "Buffer is not large enough!"
 
-        ### YOUR CODE HERE ###
-
         # This time it is double q learning.
         # Remember the idea behind double q learning.
+        #import pdb;pdb.set_trace()
+        ### YOUR CODE HERE ###
+        batch_ids, transitions, ISweights = self.buffer.sample(batch_size)
+        #LEARN: *, zip methods
+        states = torch.from_numpy(np.vstack([e.state for e in transitions])).to(self.device)
+        actions = torch.from_numpy(np.vstack([e.action for e in transitions])).to(self.device)
+        rewards = torch.from_numpy(np.vstack([e.reward for e in transitions])).to(self.device)
+        next_states = torch.from_numpy(np.vstack([e.next_state for e in transitions])).to(self.device)
+        terminals = torch.from_numpy(np.vstack([e.terminal for e in transitions]).astype(np.uint8)).to(self.device)
+        
+        state_action_values = self.valuenet.forward(states.float()).gather(1, actions.long())
+        next_state_values = torch.zeros(batch_size)
+        next_state_values = (~terminals).float() * self.target_net(next_states.float()).max(1)[0]
+        # Compute the expected Q values
+        expected_state_action_values = (next_state_values * gamma) + rewards.float()
 
-        raise NotImplementedError
+        loss = torch.nn.MSELoss(reduction='mean')
+        output = loss(state_action_values, expected_state_action_values)
+        self.opt.zero_grad()
+        output.backward()
+        for param in self.valuenet.parameters():
+            param.grad.data.clamp_(-1, 1)
+        self.opt.step()
+        self.target_update_counter += 1
+        if self.target_update_counter % self. target_update_period == 0:
+            self.target_net.load_state_dict(self.valuenet.state_dict())
         ###       END      ###
-        return td_error             # mean absulute td error
+        return output.item()           # mean absolute td error
+

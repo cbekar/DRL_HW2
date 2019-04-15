@@ -7,6 +7,7 @@ import ipdb
 
 ArgsDQN = namedtuple("ArgsDQN", """
                                 env_name
+                                nstates
                                 nact
                                 buffersize
                                 max_epsilon
@@ -23,6 +24,7 @@ ArgsDQN = namedtuple("ArgsDQN", """
 
 ArgsDDPQN = namedtuple("ArgsDDPQN", """
                                     env_name
+                                    nstates
                                     nact
                                     buffersize
                                     max_epsilon
