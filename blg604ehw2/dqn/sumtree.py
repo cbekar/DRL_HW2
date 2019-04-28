@@ -8,6 +8,7 @@ import numpy as np
 from numba import jitclass, jit, njit
 from numba.numpy_support import from_dtype
 from numba import int64, float64, bool_
+import torch
 
 spec_sum_tree = [
     ("__capacity", int64),
@@ -20,7 +21,7 @@ spec_sum_tree = [
     ("__done", bool_),
 ]
 
-@jitclass(spec_sum_tree)
+#@jitclass(spec_sum_tree)
 class SumTree():
     """ Binary heap with the property: parent node is the sum of
     two child nodes. Tree has a maximum size and whenever
@@ -31,12 +32,12 @@ class SumTree():
         - maxsize: Capacity of the SumTree
 
     """
-    def __init__(self, maxsize):
+    def __init__(self, device, shape, maxsize):
         ### YOUR CODE HERE ###
         # Pointer to leaf tree
         #import pdb;pdb.set_trace()
         self.__data_pointer = 0
-
+        self.device = device
         # Numbers of leaf nodes that contains experience
         self.__capacity = maxsize
 
@@ -44,14 +45,14 @@ class SumTree():
         # Leaf nodes = capacity
         # Parent nodes = capacity - 1(minus root)
         # Priority tree = 2 * capacity - 1
-        self.__tree = np.zeros(2 * maxsize - 1)
+        self.__tree = torch.from_numpy(np.zeros(2 * maxsize - 1)).float().to(self.device)
 
         # Initialize experience tree with zeros
-        self.__state = np.zeros((maxsize, 1, 8))
-        self.__action = np.zeros((maxsize, 1, 1))
-        self.__reward = np.zeros(maxsize)
-        self.__next_state = np.zeros((maxsize, 1, 8))
-        self.__done = np.zeros(maxsize)
+        self.__state = torch.from_numpy(np.zeros(shape)).float().to(self.device)
+        self.__action = torch.from_numpy(np.zeros(maxsize)).float().to(self.device)
+        self.__reward = torch.from_numpy(np.zeros(maxsize)).float().to(self.device)
+        self.__next_state = torch.from_numpy(np.zeros(shape)).float().to(self.device)
+        self.__done = torch.from_numpy(np.zeros(maxsize)).byte().to(self.device)
         ###       END      ###
 
     def push(self, t, priority):
@@ -63,11 +64,12 @@ class SumTree():
         """
         ### YOUR CODE HERE ###
         # Put data inside arrays
+        #import pdb;pdb.set_trace()
         self.__state[self.__data_pointer] = t.state
         self.__action[self.__data_pointer] = t.action
         self.__reward[self.__data_pointer] = t.reward
         self.__next_state[self.__data_pointer] = t.next_state
-        self.__done[self.__data_pointer] = t.terminal
+        self.__done[self.__data_pointer] = t.terminal*1
 
         # Update prioritized tree. Obs: Fill the leaves from left to right
         tree_index = self.__data_pointer + self.__capacity - 1
@@ -128,7 +130,9 @@ class SumTree():
         return self.__tree[0]
 
     def get_priority(self):
-        return self.__tree[-self.__capacity:]
+        #import pdb;pdb.set_trace()
+        t = self.__tree[-self.__capacity:]
+        return t
 
     def get_all_tree(self):
         return self.__tree

@@ -50,6 +50,8 @@ def episodic_train(env, agent, args, epsilon):
     for time_step in range(args.max_eps_len):
         action = agent.e_greedy_policy(state, epsilon)
         next_state, reward, done, _ = env.step(action)
+        state = agent.serialize(state)
+        next_state = agent.serialize(next_state)
         agent.push_transition(Transition(state, action, reward, next_state, done))
         if agent.buffer.size >= args.batch_size: #wait for the buffer to fill up with random tx
             td_error = agent.update(args.batch_size, args.gamma)
@@ -93,4 +95,3 @@ def episodic_test(env, agent, args, render=False, monitor_path=None):
         env.close()
 
     return eps_reward
-    

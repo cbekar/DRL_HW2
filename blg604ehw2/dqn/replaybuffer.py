@@ -7,6 +7,7 @@ import torch
 from blg604ehw2.dqn.sumtree import SumTree
 from numba import jitclass, int64, float64, bool_, jit, njit
 from numba.numpy_support import from_dtype
+from torch.distributions import uniform
 
 Transition = namedtuple("Transition", ("state",
                                        "action",
@@ -70,7 +71,12 @@ class UniformBuffer(BaseBuffer):
     def push(self, transition):
         """Push transition into the buffer"""
         ### YOUR CODE HERE ###
-        super().push(transition,0,0)
+        #import pdb;pdb.set_trace()
+        a = torch.from_numpy(np.array(transition.action)).float()
+        r = torch.from_numpy(np.array(transition.reward)).float()
+        t = torch.from_numpy(np.array(transition.terminal*1)).byte()
+        trans = Transition(transition.state, a, r, transition.next_state, t)
+        super().push(trans,0,0)
         ###       END      ###
 
     def sample(self, batchsize):
@@ -97,7 +103,7 @@ class PriorityBuffer(BaseBuffer):
         maximum priority value will be clipped
     """
 
-    def __init__(self, capacity):
+    def __init__(self, device, shape, capacity):
         ### YOUR CODE HERE ###
         self.__per_e = 0.01
         # Hyperparameter used to make a tradeoff between taking only high priority and sampling randomly
@@ -109,7 +115,7 @@ class PriorityBuffer(BaseBuffer):
         # Clipped abs error
         self.__absolute_error_upper = 1.
 
-        self.__tree = SumTree(capacity)
+        self.__tree = SumTree(device, shape, capacity)
         ###       END      ###
 
     def _clip_p(self, p):
@@ -121,7 +127,7 @@ class PriorityBuffer(BaseBuffer):
         #import pdb;pdb.set_trace()
         """ Push the transition with priority """
         ### YOUR CODE HERE ###
-        max_priority = np.max(self.__tree.get_priority())
+        max_priority = torch.max(self.__tree.get_priority())
         # max_priority = 0
 
         # We can't put priority = 0 since this exp will never being taken
@@ -137,6 +143,7 @@ class PriorityBuffer(BaseBuffer):
         is sampled with probability proportional to
         the priority values. """
         ### YOUR CODE HERE ###
+        #import pdb;pdb.set_trace()
         memory_batch = []
 
         batch_idx, batch_ISWeights = (
@@ -153,13 +160,13 @@ class PriorityBuffer(BaseBuffer):
         )  # max = 1
 
         # Calculating the max_weight
-        p_min = np.min(self.__tree.get_priority()) / self.__tree.total_priority()
+        p_min = torch.min(self.__tree.get_priority()) / self.__tree.total_priority()
         max_weight = (p_min * batch_size) ** (-self.__min_priority)
 
         for i in range(batch_size):
             # A value is uniformly sample from each range
             limit_a, limit_b = priority_segment * i, priority_segment * (i + 1)
-            value = np.random.uniform(limit_a, limit_b)
+            value = uniform.Uniform(limit_a, limit_b).sample()
 
             # Experience that correspond to each value is retrieved
             index, priority, state, action, reward, next_state, terminal = self.__tree.get(value)
@@ -169,14 +176,14 @@ class PriorityBuffer(BaseBuffer):
 
             #  IS = (1/batch_size * 1/P(i))**per_b /max wi == (Batch_size*P(i))**-per_b  /MAX(weight)
             batch_ISWeights[i, 0] = (
-                np.power(batch_size * sampling_probabilities, -self.__min_priority)
+                torch.pow(batch_size * sampling_probabilities, -self.__min_priority)
                 / max_weight
             )
 
             batch_idx[i] = index
             memory_batch.append(Transition(state, action, reward, next_state, terminal))
 
-        return batch_idx, memory_batch, batch_ISWeights
+        return memory_batch
         ###       END      ###
     @property
     def size(self):
