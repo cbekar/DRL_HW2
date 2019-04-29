@@ -10,16 +10,16 @@ from numba.numpy_support import from_dtype
 from numba import int64, float64, bool_
 import torch
 
-spec_sum_tree = [
-    ("__capacity", int64),
-    ("__data_pointer", int64),
-    ("__tree", float64),
-    ("__state", float64),
-    ("__action", int64),
-    ("__reward", float64),
-    ("__next_state", float64),
-    ("__done", bool_),
-]
+# spec_sum_tree = [
+#     ("__capacity", int64),
+#     ("__data_pointer", int64),
+#     ("__tree", float64),
+#     ("__state", float64),
+#     ("__action", int64),
+#     ("__reward", float64),
+#     ("__next_state", float64),
+#     ("__done", bool_),
+# ]
 
 #@jitclass(spec_sum_tree)
 class SumTree():

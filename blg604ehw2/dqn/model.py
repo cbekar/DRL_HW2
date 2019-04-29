@@ -104,7 +104,7 @@ class BaseDqn:
         transitions = self.buffer.sample(batch_size)
         #LEARN: *, zip methods
         #import pdb;pdb.set_trace()
-        states = torch.stack([e.state.unsqueeze(0) for e in transitions])
+        states = torch.stack([e.state.unsqueeze(0) for e in transitions]).float().to(self.device)
         actions = torch.stack([e.action for e in transitions]).float().to(self.device)
         rewards = torch.stack([e.reward for e in transitions]).float().to(self.device)
         next_states = torch.stack([e.next_state.unsqueeze(0) for e in transitions]).float().to(self.device)
@@ -249,9 +249,20 @@ class DuelingDoublePrioritizedDQN(BaseDqn, torch.nn.Module):
         self.target_net = deepcopy(valuenet)
         self.target_update_period = target_replace_period
         self.target_update_counter = 0
-        #shape=(1,8)
+        if nact == 4:
+            s1=1
+            s2=8
+            s3=0
+        else:
+            s1=4
+            s2=84
+            s3=84
+        if s3 == 0:
+            sh=(buffer_capacity,s1,s2)
+        else:
+            sh=(buffer_capacity,s1,s2,s3)
         self.buffer = PriorityBuffer(device=self.device,\
-                                     shape=(buffer_capacity,1,8),capacity=buffer_capacity)
+                                     shape=sh,capacity=buffer_capacity)
         self.opt = torch.optim.Adam(self.valuenet.parameters(), lr=lr)
         self.gamma = gamma
         ###       END      ###
