@@ -22,7 +22,13 @@ class BaseA3c(torch.nn.Module):
         self.network = network
         ### YOUR CODE HERE ###
         # You may skip
-        raise NotImplementedError
+        # TODO: try to init w and b
+#         import pdb;pdb.set_trace()
+#         for layer in \
+#         [module for module in self.network.modules()]:
+#             try:
+#                 torch.nn.init.normal_(layer.weight, mean=0., std=0.1)
+#                 torch.nn.init.constant_(layer.bias, 0.)
         ###       END      ###
 
     def greedy_policy(self):
@@ -98,7 +104,7 @@ class BaseA3c(torch.nn.Module):
         """ Set device name and the model's
          device.
         """
-        super.to(value)
+        super().to(value)
         self._device = value
 
 

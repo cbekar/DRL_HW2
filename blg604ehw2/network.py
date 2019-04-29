@@ -62,27 +62,29 @@ class SimpleHead(torch.nn.Module):
         """Parameter initialization"""
         pass
 
-class DuellingHead(torch.nn.Module):
-    """ Duelling output head
+class DuelingHead(torch.nn.Module):
+    """ Dueling output head
         Advantage and value functions are used for the
         final q values.
 
             Q(s, a) = V(s) + A(s, a) - sum_i(A(s, a_i))/n(A)
 
-        As the number of actions is increased, duelling
+        As the number of actions is increased, dueling
         head performs better than the linear one.
     """
 
     def __init__(self, nact, n_in):
         super().__init__()
         ### YOUR CODE HERE ###
-        self.head = torch.nn.Linear(n_in, nact)
+        self.vhead = torch.nn.Linear(n_in, 1)
+        self.ahead = torch.nn.Linear(n_in, nact)
         self._init_weights()
         ###       END      ###
 
     def forward(self, x):
         ### YOUR CODE HERE ###
-        return self.head(x)
+        advantage = self.ahead(x)
+        return self.vhead(x) + self.ahead(x) - advantage.mean()
         ###       END      ###
 
     # Optional
