@@ -35,6 +35,7 @@ class Cnn(torch.nn.Module):
         self.fc4 = torch.nn.Linear(7 * 7 * 64, out_feature)
 
     def forward(self, x):
+        import pdb;pdb.set_trace()
         x = torch.nn.functional.relu(self.conv1(x))
         x = torch.nn.functional.relu(self.conv2(x))
         x = torch.nn.functional.relu(self.conv3(x))
@@ -100,6 +101,7 @@ class Network(torch.nn.Module):
         self.head_net = head_net
 
     def forward(self, x, *args):
+        #import pdb;pdb.set_trace()
         x = self.feature_net(x)
         x = self.head_net(x, *args)
         return x
@@ -143,6 +145,7 @@ class ContinuousDistHead(torch.nn.Module):
         self.value_head = torch.nn.GRUCell(128, 1)
 
     def forward(self, x, h):
+        #import pdb;pdb.set_trace()
         h_a, h_c = h
         h_a = self.dist_gru(x, h_a)
         mu = self.dist_mu(h_a)
@@ -152,4 +155,3 @@ class ContinuousDistHead(torch.nn.Module):
         h_c = self.value_gru(x, h_c)
         value = self.value_head(h_c)
         return dist, value, (h_a, h_c)
-
