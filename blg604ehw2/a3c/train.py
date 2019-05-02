@@ -3,7 +3,7 @@
 import torch
 import gym
 import numpy as np
-from collections import namedtuple
+from collections import namedtuple, deque
 import torch.multiprocessing as mp
 
 from blg604ehw2.utils import LoadingBar
@@ -48,7 +48,7 @@ def train_worker(args, globalmodel, optim, envfunc, agentfunc, tc, logger):
     # maximum time step.
     # Logger = namedtuple("Logger", "eps_reward best_reward best_model time_steps time")
     tstep = 0
-    while logger.time.value < args.maxtimestep:
+    while logger.time_steps[-1] < args.maxtimestep:
         agent.zero_grad()
         s = env.reset()
         buffer_s, buffer_a, buffer_r = [], [], []
@@ -65,7 +65,6 @@ def train_worker(args, globalmodel, optim, envfunc, agentfunc, tc, logger):
             buffer_a.append(a)
             buffer_r.append(r)
             if tstep % args.nstep == 0 or done: # update global and assign to local net
-                #import pdb;pdb.set_trace()
                 agent.synchronize(globalmodel.state_dict())
                 agent.push_and_pull(optim, globalmodel, done,
                                     s_, buffer_s, buffer_a, buffer_r, args.gamma, args.beta)
@@ -76,15 +75,18 @@ def train_worker(args, globalmodel, optim, envfunc, agentfunc, tc, logger):
                         logger.eps_reward[t] = ep_r
                         logger.best_reward[t] = ep_r
                     else:
-                        logger.eps_reward[t] = \
-                        (logger.eps_reward[t] * (tc-1) + ep_r)/tc
-                    logger.best_reward.append(logger.eps_reward[t] if 
-                        logger.eps_reward[t] > logger.best_reward[t] else 
-                                              logger.eps_reward[t-1])
+                        logger.eps_reward[t] = (logger.eps_reward[t] * (tc-1) + ep_r)/tc
+                    if logger.eps_reward[t] > logger.best_reward[t]:
+                        logger.best_reward.append(logger.eps_reward[t])
+                        logger.best_model.synchronize(agent.state_dict())
+                    else:
+                        logger.best_reward.append(logger.eps_reward[t-1])
                     logger.time.value += 1
                     break
             s = s_
             tstep += 1
+            logger.time_steps.append(tstep)
+    print("lan")
 
     ###       END      ###
 
@@ -116,15 +118,37 @@ def test_worker(args, globalmodel, envfunc, agentfunc, lock, logger,
     agent.eval()
     bar = LoadingBar(args.maxtimestep, "Time step")
     ### YOUR CODE HERE ###
-
-    # Remember to call bar.process with time step and
-    # best reward achived after each episode.
-    # You may not use LoadingBar (optional).
-
-    # You can include additional logging
-    # Remember to change Logger namedtuple and
-    # logger in order to do so.
-
-    #raise NotImplementedError
-
+#     import pdb;pdb.set_trace()
+    state = env.reset()
+    state = agent.v_wrap(state)
+    reward_sum = 0
+    done = True
+    # a quick hack to prevent the agent from stucking
+    actions = deque(maxlen=100)
+    episode_length = 0
+    while logger.time_steps[-1] < args.maxtimestep:
+        episode_length += 1
+        if done:
+            cx = torch.zeros(1, 128)
+            hx = torch.zeros(1, 128)
+        else:
+            cx = cx.detach()
+            hx = hx.detach()
+        with torch.no_grad():
+            dist, value, (hx, cx) = agent.network(state, (hx, cx))
+        action = dist.sample().squeeze().numpy()
+        state, reward, done, _ = env.step(action)
+        done = done or episode_length >= args.maxtimestep
+        reward_sum += reward
+        # a quick hack to prevent the agent from stucking
+        actions.append(action)
+        if len(actions) == actions.maxlen:
+            done = True
+        if done:
+            reward_sum = 0
+            episode_length = 0
+            actions.clear()
+            state = env.reset()
+        state = agent.v_wrap(state)
+        bar.progress(episode_length, reward_sum)
     ###       END      ###

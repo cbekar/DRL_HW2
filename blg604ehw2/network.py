@@ -35,7 +35,7 @@ class Cnn(torch.nn.Module):
         self.fc4 = torch.nn.Linear(7 * 7 * 64, out_feature)
 
     def forward(self, x):
-        import pdb;pdb.set_trace()
+        #import pdb;pdb.set_trace()
         x = torch.nn.functional.relu(self.conv1(x))
         x = torch.nn.functional.relu(self.conv2(x))
         x = torch.nn.functional.relu(self.conv3(x))

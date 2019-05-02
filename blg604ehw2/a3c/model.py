@@ -69,7 +69,7 @@ class BaseA3c(torch.nn.Module):
         if done:
             v_s = 0.              # terminal
         else:
-            _, v_s, _ = self.network.forward(self.v_wrap(s_),(None, None))
+            _, v_s, _ = self.network(self.v_wrap(s_),(None, None))
             v_s = v_s.detach()
         buffer_v_target = []
         for r in br[::-1]:    # reverse buffer r
