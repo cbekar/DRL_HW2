@@ -86,8 +86,6 @@ def train_worker(args, globalmodel, optim, envfunc, agentfunc, tc, logger):
             s = s_
             tstep += 1
             logger.time_steps.append(tstep)
-    print("lan")
-
     ###       END      ###
 
 def test_worker(args, globalmodel, envfunc, agentfunc, lock, logger,
@@ -122,6 +120,7 @@ def test_worker(args, globalmodel, envfunc, agentfunc, lock, logger,
     state = env.reset()
     state = agent.v_wrap(state)
     reward_sum = 0
+    max_rew = -200.
     done = True
     # a quick hack to prevent the agent from stucking
     actions = deque(maxlen=100)
@@ -134,8 +133,9 @@ def test_worker(args, globalmodel, envfunc, agentfunc, lock, logger,
         else:
             cx = cx.detach()
             hx = hx.detach()
+        #print("start", episode_length)
         with torch.no_grad():
-            dist, value, (hx, cx) = agent.network(state, (hx, cx))
+            dist, value, (hx, cx) = logger.best_model.network(state, (hx, cx))
         action = dist.sample().squeeze().numpy()
         state, reward, done, _ = env.step(action)
         done = done or episode_length >= args.maxtimestep
@@ -146,9 +146,11 @@ def test_worker(args, globalmodel, envfunc, agentfunc, lock, logger,
             done = True
         if done:
             reward_sum = 0
-            episode_length = 0
             actions.clear()
             state = env.reset()
+        if max_rew < reward_sum:
+            max_rew = reward_sum
         state = agent.v_wrap(state)
-        bar.progress(episode_length, reward_sum)
+        #print("stop", episode_length)
+        bar.progress(episode_length, max_rew)
     ###       END      ###
