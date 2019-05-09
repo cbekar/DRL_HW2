@@ -2,13 +2,9 @@ import torch
 import numpy as np
 from collections import namedtuple
 
+from blg604ehw2.utils import normalize
 from blg604ehw2.utils import process_state
 from blg604ehw2.atari_wrapper import LazyFrames
-
-# def v_wrap(np_array, dtype=np.float32):
-#     if np_array.dtype != dtype:
-#         np_array = np_array.astype(dtype)
-#     return torch.from_numpy(np_array).unsqueeze(0)
 
 class BaseA3c(torch.nn.Module):
     """ Base class for Asynchronous Advantage Actor-Critic agent.
@@ -41,11 +37,18 @@ class BaseA3c(torch.nn.Module):
         the given state
         """
     
-    def v_wrap(self, np_array, dtype=np.float32):
-        if np_array.dtype != dtype:
-            np_array = np_array.astype(dtype)
-        return torch.from_numpy(np_array).unsqueeze(0)
-
+    def serialize(self, s):
+        #import pdb;pdb.set_trace()
+        if isinstance(s, LazyFrames):
+            s = np.array(s, dtype="float32")
+            s = np.moveaxis(s, -1, 0)
+            s = normalize(s)
+        if isinstance(s, np.ndarray):
+            s = torch.from_numpy(s).float().to(self.device).unsqueeze_(0)
+        if s.shape[0] != 1:
+            s.unsqueeze_(0)
+        return s
+    
     def push_and_pull(self, opt, global_agent, done, s_, bs, ba, br, gamma, beta):
         """ Perform gradient calculations via backward
         operation for actor and critic loses.
@@ -67,9 +70,9 @@ class BaseA3c(torch.nn.Module):
         #   from the bootstrap buffer
         #   First one is suggested!
         if done:
-            v_s = 0.              # terminal
+            v_s = torch.zeros(1)  # terminal
         else:
-            _, v_s, _ = self.network(self.v_wrap(s_),(None, None))
+            _, v_s, _ = self.network(self.serialize(s_),(None, None))
             v_s = v_s.detach()
         buffer_v_target = []
         for r in br[::-1]:    # reverse buffer r
@@ -78,12 +81,8 @@ class BaseA3c(torch.nn.Module):
         buffer_v_target.reverse()
         opt.zero_grad()
     #def loss(self, transitions, last_state, is_terminal, gamma, beta):
-        a_loss, c_loss = \
-        self.loss(self.v_wrap(np.vstack(bs)), \
-                  self.v_wrap(np.array(ba), dtype=np.int64) \
-                  if ba[0].dtype == np.int64 else self.v_wrap(np.vstack(ba)), \
-                  self.v_wrap(np.array(buffer_v_target)[:, None]),\
-                  beta)
+        #import pdb;pdb.set_trace()
+        a_loss, c_loss = self.loss(bs, ba, buffer_v_target, beta)
         loss = (a_loss + c_loss).mean() 
         # calculate local gradients and push local parameters to global
         loss.backward()
@@ -93,9 +92,11 @@ class BaseA3c(torch.nn.Module):
         h_a, h_c = (None, None)
         self.train()
         critic_loss, actor_loss = (0., 0.)
-        for i in range(S.shape[0]):
+        for i in range(len(S)):
+            #import pdb;pdb.set_trace()
             dist, value, (h_a, h_c) = self.network(S[i],(h_a, h_c))
             critic_loss += torch.nn.functional.mse_loss(value, V[i])
+#             import pdb;pdb.set_trace()
             log_prob = dist.log_prob(A[i])
             vnext = value.detach()
 #             entropy = 0.5 + 0.5 * math.log(2 * math.pi) + torch.log(m.scale)  # exploration
@@ -170,11 +171,14 @@ class DiscreteA3c(BaseA3c):
     def greedy_policy(self, dist):
         """ Return best action at the given state """
         ### YOUR CODE HERE ###
-        return super().greedy_policy(dist)
+        dist, _, _ = self.network.forward(dist,(None,None))
+        return torch.argmax(dist.type(torch.FloatTensor))
         ###       END      ###
 
     def soft_policy(self, s):
         """ Sample an action  """
         ### YOUR CODE HERE ###
-        return super().soft_policy(action)
+        #import pdb;pdb.set_trace()
+        dist, _, _ = self.network.forward(s,(None,None))
+        return dist.sample()
         ###       END      ###

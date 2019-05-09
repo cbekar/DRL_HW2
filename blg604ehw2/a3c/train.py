@@ -1,5 +1,5 @@
 """ Worker functions for training and testing """
-
+import time
 import torch
 import gym
 import numpy as np
@@ -21,7 +21,7 @@ A3C_args = namedtuple("A3C_args",
                       """)
 
 
-def train_worker(args, globalmodel, optim, envfunc, agentfunc, tc, logger):
+def train_worker(args, globalmodel, optim, envfunc, agentfunc, t, tc, logger):
     """ Training worker function.
         Train until the maximum time step is reached.
         Arguments:
@@ -40,29 +40,27 @@ def train_worker(args, globalmodel, optim, envfunc, agentfunc, tc, logger):
     agent = agentfunc()
     agent.train()
     ### YOUR CODE HERE ###
-#     import pdb;pdb.set_trace()
     # Remember Logger has the shared time step value
-    
     # Worker should be in a loop that terminates when
     # the shared time step value is higher than the
     # maximum time step.
     # Logger = namedtuple("Logger", "eps_reward best_reward best_model time_steps time")
     tstep = 0
-    while logger.time_steps[-1] < args.maxtimestep:
+    while logger.time.value < args.maxtimestep:
         agent.zero_grad()
         s = env.reset()
         buffer_s, buffer_a, buffer_r = [], [], []
         ep_r = 0.
         time_start = tstep
+        #import pdb;pdb.set_trace()
         for step in range(args.maxlen):
-            a = agent.soft_policy(agent.v_wrap(np.array(s)))
-            #import pdb;pdb.set_trace()
+            a = agent.soft_policy(agent.serialize(s))
             s_, r, done, _ = env.step(a.squeeze())
             if tstep - time_start == args.maxlen - 1:
                 done = True
             ep_r += r #todo pushpull içinden al
-            buffer_s.append(s)
-            buffer_a.append(a)
+            buffer_s.append(agent.serialize(s))
+            buffer_a.append(agent.serialize(a))
             buffer_r.append(r)
             if tstep % args.nstep == 0 or done: # update global and assign to local net
                 agent.synchronize(globalmodel.state_dict())
@@ -70,7 +68,6 @@ def train_worker(args, globalmodel, optim, envfunc, agentfunc, tc, logger):
                                     s_, buffer_s, buffer_a, buffer_r, args.gamma, args.beta)
                 buffer_s, buffer_a, buffer_r = [], [], []
                 if done:  # done and print information
-                    t = logger.time.value
                     if logger.eps_reward[t] == None:
                         logger.eps_reward[t] = ep_r
                         logger.best_reward[t] = ep_r
@@ -81,10 +78,10 @@ def train_worker(args, globalmodel, optim, envfunc, agentfunc, tc, logger):
                         logger.best_model.synchronize(agent.state_dict())
                     else:
                         logger.best_reward.append(logger.eps_reward[t-1])
-                    logger.time.value += 1
                     break
             s = s_
             tstep += 1
+            logger.time.value += 1
             logger.time_steps.append(tstep)
     ###       END      ###
 
@@ -118,39 +115,43 @@ def test_worker(args, globalmodel, envfunc, agentfunc, lock, logger,
     ### YOUR CODE HERE ###
 #     import pdb;pdb.set_trace()
     state = env.reset()
-    state = agent.v_wrap(state)
+    state = agent.serialize(state)
     reward_sum = 0
     max_rew = -200.
     done = True
     # a quick hack to prevent the agent from stucking
     actions = deque(maxlen=100)
     episode_length = 0
+    
     while logger.time_steps[-1] < args.maxtimestep:
-        episode_length += 1
-        if done:
-            cx = torch.zeros(1, 128)
-            hx = torch.zeros(1, 128)
+        if logger.time_steps[-1] > 0:
+            episode_length += 1
+            if done:
+                cx = torch.zeros(1, 128)
+                hx = torch.zeros(1, 128)
+            else:
+                cx = cx.detach()
+                hx = hx.detach()
+            #print("start", episode_length)
+            with torch.no_grad():
+                dist, value, (hx, cx) = logger.best_model.network(state, (hx, cx))
+            action = dist.sample().squeeze().numpy()
+            state, reward, done, _ = env.step(action)
+            done = done or episode_length >= args.maxtimestep
+            reward_sum += reward
+            # a quick hack to prevent the agent from stucking
+            actions.append(action)
+            if len(actions) == actions.maxlen:
+                done = True
+            if done:
+                reward_sum = 0
+                actions.clear()
+                state = env.reset()
+            if max_rew < reward_sum:
+                max_rew = reward_sum
+            state = agent.serialize(state)
+            print("train steps", logger.time.value, "test steps" ,episode_length, "max reward", max_rew)
+            bar.progress(episode_length, max_rew)
         else:
-            cx = cx.detach()
-            hx = hx.detach()
-        #print("start", episode_length)
-        with torch.no_grad():
-            dist, value, (hx, cx) = logger.best_model.network(state, (hx, cx))
-        action = dist.sample().squeeze().numpy()
-        state, reward, done, _ = env.step(action)
-        done = done or episode_length >= args.maxtimestep
-        reward_sum += reward
-        # a quick hack to prevent the agent from stucking
-        actions.append(action)
-        if len(actions) == actions.maxlen:
-            done = True
-        if done:
-            reward_sum = 0
-            actions.clear()
-            state = env.reset()
-        if max_rew < reward_sum:
-            max_rew = reward_sum
-        state = agent.v_wrap(state)
-        #print("stop", episode_length)
-        bar.progress(episode_length, max_rew)
+            time.sleep(1)
     ###       END      ###
