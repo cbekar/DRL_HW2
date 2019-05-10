@@ -52,7 +52,6 @@ def train_worker(args, globalmodel, optim, envfunc, agentfunc, t, tc, logger):
         buffer_s, buffer_a, buffer_r = [], [], []
         ep_r = 0.
         time_start = tstep
-        #import pdb;pdb.set_trace()
         for step in range(args.maxlen):
             a = agent.soft_policy(agent.serialize(s))
             s_, r, done, _ = env.step(a.squeeze())
@@ -113,7 +112,7 @@ def test_worker(args, globalmodel, envfunc, agentfunc, lock, logger,
     agent.eval()
     bar = LoadingBar(args.maxtimestep, "Time step")
     ### YOUR CODE HERE ###
-#     import pdb;pdb.set_trace()
+    #import pdb;pdb.set_trace()
     state = env.reset()
     state = agent.serialize(state)
     reward_sum = 0
@@ -123,8 +122,8 @@ def test_worker(args, globalmodel, envfunc, agentfunc, lock, logger,
     actions = deque(maxlen=100)
     episode_length = 0
     
-    while logger.time_steps[-1] < args.maxtimestep:
-        if logger.time_steps[-1] > 0:
+    while logger.time.value < args.maxtimestep:
+        if logger.time.value > 0:
             episode_length += 1
             if done:
                 cx = torch.zeros(1, 128)

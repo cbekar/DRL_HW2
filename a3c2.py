@@ -86,9 +86,9 @@ processes = []
 
 process = mp.Process(target=test_worker,
                      args=(breakout_args, global_agent, breakout_env, breakout_agent, lock, logger))
-#train_worker(breakout_args, global_agent, sharedopt, breakout_env, breakout_agent, 0, N_PROCESSES, logger)
+train_worker(breakout_args, global_agent, sharedopt, breakout_env, breakout_agent, 0, N_PROCESSES, logger)
 #test_worker(breakout_args, global_agent, breakout_env, breakout_agent, N_PROCESSES, logger)
-process.start()
+"""process.start()
 processes.append(process)
 for t in range(N_PROCESSES):
     process = mp.Process(target=train_worker,
@@ -101,4 +101,4 @@ for p in processes:
 #%%
 # Save the best model's parameters
 model_path = "monitor/Breakout/model_state_dict"
-torch.save(logger.best_model.state_dict(), model_path)
+torch.save(logger.best_model.state_dict(), model_path)"""
